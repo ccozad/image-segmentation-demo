@@ -3,18 +3,25 @@ name = "segdemo-worker"
 version = "0.1.0"
 description = "Image segmentation demo — segmentation worker (M2 fake processing)"
 requires-python = ">=3.12"
+# NOTE: torch, torchvision, opencv (v5) and SAM 3 are intentionally NOT listed
+# here — they are heavy/GPU and installed in the Dockerfile (CUDA base). Keeping
+# them out lets this package install on a CPU-only dev box so the plumbing and
+# overlay unit tests still run without a GPU.
 dependencies = [
     "nats-py>=2.6",
     "boto3>=1.34",
     "structlog>=24.1",
     "Pillow>=10.3",
     "pydantic-settings>=2.2",
+    "numpy>=1.26",
 ]
 
 [project.optional-dependencies]
 dev = [
     "pytest>=8",
     "pytest-asyncio>=0.23",
+    # CPU OpenCV so the overlay test runs on a dev box; the image uses v5.
+    "opencv-python-headless>=4.10",
 ]
 
 [build-system]

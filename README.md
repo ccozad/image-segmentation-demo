@@ -24,20 +24,85 @@ This brings up the infrastructure services:
 On first boot a one-shot init container creates the `raw` and `annotated`
 buckets. Default MinIO console login is `minioadmin` / `minioadmin`.
 
+The API is at `localhost:8000`. After it's up, apply migrations with `make migrate`.
+
 Make targets:
 
 | Command      | Description                                  |
 | ------------ | -------------------------------------------- |
 | `make up`    | Start services and wait until healthy        |
+| `make migrate` | Apply database migrations (Alembic)        |
 | `make down`  | Stop services (volumes preserved)            |
 | `make logs`  | Tail logs from all services                  |
 | `make clean` | Stop services and delete volumes (full reset)|
 
+## Running the segmentation worker (GPU required)
+
+From milestone M3 on, the worker runs the real **SAM 3** model and **requires an
+NVIDIA GPU host** — CPU is not supported. The `segmentation_worker` service will
+not start on a machine without a GPU. (The infra + API services run fine without
+one; you just won't get annotations.)
+
+### 1. Hugging Face access + token
+
+The `facebook/sam3.1` checkpoint is gated:
+
+1. Request access at <https://huggingface.co/facebook/sam3.1> (approval can take
+   a day or two).
+2. Create a **READ** token at <https://huggingface.co/settings/tokens>.
+3. Put it in your `.env`:
+
+   ```sh
+   HF_TOKEN=hf_xxxxxxxxxxxxxxxxxxxxxxxxxxxx
+   ```
+
+The worker fails fast with a clear message if `HF_TOKEN` is missing. The
+checkpoint (several GB) downloads on first boot and is cached in the `hf_cache`
+Docker volume, so later restarts skip the download.
+
+### 2. GPU runtime
+
+- **Linux:** install the
+  [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html)
+  so Docker can pass the GPU into containers.
+- **Windows (RTX 30-series etc.):** install a recent NVIDIA driver on Windows,
+  enable **Docker Desktop → Settings → Resources → WSL Integration**, and run all
+  commands **from inside a WSL2 (Ubuntu) shell** — not PowerShell. Inside WSL2,
+  `make`/`docker compose` work exactly as on Linux, and the GPU is available to
+  containers via the Windows driver (no separate toolkit install needed). If you
+  don't have `make` in WSL2: `sudo apt install make`. (The raw equivalents also
+  work, e.g. `docker compose up -d --wait postgres nats minio`.)
+
+A 12 GB GPU (e.g. desktop RTX 3060) is sufficient for SAM 3 *image* inference.
+Non-Compose users can pass `--gpus all` to `docker run` instead of the Compose
+`deploy.resources` block.
+
+### 3. Run
+
+```sh
+cp .env.example .env      # then edit HF_TOKEN
+make up                   # builds the CUDA worker image (large first build)
+make migrate
+```
+
+Upload an image with a concept prompt (e.g. via the API or the M4 frontend) and
+the worker highlights matching instances. A prompt with no matches returns the
+original image with `mask_count = 0`.
+
 ## Architecture
 
-The application services (FastAPI API, segmentation worker, React frontend) land
-in later milestones — full architecture diagram coming in M2. This milestone (M0)
-stands up the infrastructure layer only.
+```
+React SPA ──HTTP──> FastAPI ──> Postgres (Job rows)
+                       │              ▲
+                  raw bytes        status/result updates
+                       ▼              │
+                    MinIO/S3   <─ NATS ─> segmentation worker (SAM 3 + OpenCV 5, GPU)
+```
+
+The API persists the upload and publishes a request on NATS; the worker segments
+and reports status/results back over NATS; the API applies them to the job row.
+The worker never touches the database directly. Storage is env-switched: MinIO in
+dev, real AWS S3 in prod (M5). The React frontend lands in M4.
 
 ## License
 

@@ -4,15 +4,17 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Current state
 
-**M0–M2 have landed.** The repo has the Docker Compose infra stack, the FastAPI service (`src/api/`), and the segmentation worker (`src/segmentation_worker/`) with the full async loop closed (fake Pillow processing). M3–M5 remain. The architecture below is the *target*, derived from GitHub issues #1–#6 (milestone "Image Segmentation Demo v1"). Treat those issues as the source of truth; check them with `gh issue view <n>` before starting work, and update this file as milestones land.
+**M0–M3 have landed; M3 is code-complete but UNVERIFIED (needs a GPU host).** The repo has the infra stack, the FastAPI service (`src/api/`), and the worker (`src/segmentation_worker/`) now running real SAM 3 + OpenCV 5 on a CUDA base. M4–M5 remain. **M3 cannot be built or run without an NVIDIA GPU + the gated `facebook/sam3.1` checkpoint (HF_TOKEN), so it was not executed in CI/dev** — only the CPU-safe plumbing/overlay unit tests ran. When working on/after M3, verify on a GPU box. The architecture below is the *target*, derived from GitHub issues #1–#6 (milestone "Image Segmentation Demo v1"). Treat those issues as the source of truth; check them with `gh issue view <n>` before starting work, and update this file as milestones land.
 
 ### `src/api/` layout
 
 `app/config.py` (pydantic-settings), `app/db.py` (async engine/session), `app/models.py` (`Job` + `JobStatus`), `app/storage.py` (boto3 wrapper — note the separate **presign endpoint** so presigned URLs use `localhost` not the internal `minio` host), `app/schemas.py`, `app/routes/{images,health}.py`. NATS lives in `app/messaging.py` (JetStream connect/stream/publisher + the injectable `get_publisher`) and `app/events.py` (the `on_status`/`on_result` DB updates). `app/main.py`'s lifespan connects to JetStream, ensures the stream, and starts the durable event subscribers. Alembic is in `src/api/alembic/`. Run tests with `cd src/api && pytest` (in-memory SQLite + fake storage + fake publisher; lifespan/NATS does **not** run under the test transport). Blocking boto3 calls go through `run_in_threadpool`.
 
-### `src/segmentation_worker/` layout (M2)
+### `src/segmentation_worker/` layout
 
-`worker/config.py`, `worker/storage.py` (download/upload/`object_exists`), `worker/processing.py` (`render_annotation` — the fake Pillow rectangle, swapped for SAM 3 in M3), `worker/messaging.py` (shared JetStream constants + `Publisher`), `worker/worker.py` (`process_job` blocking core + `handle_request` + the `main()` durable-consumer loop with SIGTERM drain). Blocking work runs via `asyncio.to_thread`. `cd src/segmentation_worker && pytest` mocks NATS + S3.
+`worker/config.py` (+ `hf_token`), `worker/storage.py` (download/upload with metadata/`head` — metadata carries `mask-count`/`processing-ms` for idempotent recovery), `worker/segmentation.py` (the real `Segmenter` + `overlay_masks` + `SegmentationError`), `worker/messaging.py` (shared JetStream constants + `Publisher`), `worker/worker.py` (`process_job` blocking core + `handle_request` + `main()` durable-consumer loop). Blocking work runs via `asyncio.to_thread`. `cd src/segmentation_worker && pytest` mocks NATS + S3 + a `FakeSegmenter` (no GPU); the overlay test `importorskip`s cv2.
+
+**M3 specifics:** heavy deps (torch, cv2, sam3) are imported **lazily** inside `Segmenter`/`overlay_masks` and installed only in the Dockerfile (CUDA base) — NOT in `pyproject` — so the package installs and the plumbing tests run on a CPU box. The model is built **once** at worker startup (`Segmenter()` in `main()`) and reused. Failure handling: zero masks → `done` with `mask_count=0` and the original image; `SegmentationError` → `failed` result (acked, no redelivery); non-inference errors (download/NATS) → nak (redelivery). The `facebook/sam3.1` checkpoint is gated and cached in the `hf_cache` volume; the worker exits fast if `HF_TOKEN` is unset. The worker service has a GPU `deploy.resources` reservation, so it will not start without a GPU.
 
 ### JetStream messaging (M2)
 

@@ -45,6 +45,7 @@ async def _to_read(job: Job, storage: Storage, settings: Settings) -> JobRead:
         processing_ms=job.processing_ms,
         uploaded_at=job.uploaded_at,
         completed_at=job.completed_at,
+        error=job.error,
         raw_url=raw_url,
         annotated_url=annotated_url,
     )

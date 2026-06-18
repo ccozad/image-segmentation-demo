@@ -8,6 +8,10 @@ class Settings(BaseSettings):
 
     nats_url: str = "nats://nats:4222"
 
+    # Hugging Face token for the gated facebook/sam3.1 checkpoint (M3).
+    # Required to run the real model; the worker fails fast if it is missing.
+    hf_token: str | None = None
+
     s3_endpoint: str | None = None
     s3_region: str = "us-east-1"
     aws_access_key_id: str = "minioadmin"
