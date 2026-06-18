@@ -1,0 +1,75 @@
+# M0: infrastructure only. The api / segmentation_worker / web services arrive
+# in M1 / M2 / M4 respectively.
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  nats:
+    image: nats:2-alpine
+    # -m 8222 enables the HTTP monitoring endpoint used by the healthcheck.
+    command: ["--jetstream", "-m", "8222"]
+    ports:
+      - "4222:4222"   # client
+      - "8222:8222"   # HTTP monitoring
+    healthcheck:
+      # /healthz is served by the monitoring endpoint. The nats image ships
+      # wget (busybox), so probe with that.
+      test: ["CMD-SHELL", "wget -q -O- http://localhost:8222/healthz || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  minio:
+    image: minio/minio:latest
+    command: ["server", "/data", "--console-address", ":9001"]
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+    ports:
+      - "9000:9000"   # S3 API
+      - "9001:9001"   # web console
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "mc ready local || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # One-shot: waits for MinIO, then creates the raw + annotated buckets and exits.
+  minio-init:
+    image: minio/mc:latest
+    depends_on:
+      minio:
+        condition: service_healthy
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+      RAW_BUCKET: ${RAW_BUCKET}
+      ANNOTATED_BUCKET: ${ANNOTATED_BUCKET}
+    entrypoint: >
+      /bin/sh -c "
+      mc alias set local http://minio:9000 $${MINIO_ROOT_USER} $${MINIO_ROOT_PASSWORD} &&
+      mc mb --ignore-existing local/$${RAW_BUCKET} &&
+      mc mb --ignore-existing local/$${ANNOTATED_BUCKET} &&
+      mc ls local/ &&
+      echo 'minio-init: buckets ready'
+      "
+    restart: "no"
+
+volumes:
+  postgres_data:
+  minio_data:
