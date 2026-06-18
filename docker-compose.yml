@@ -95,6 +95,16 @@ services:
       retries: 10
       start_period: 10s
 
+  segmentation_worker:
+    build: ./src/segmentation_worker
+    env_file: .env
+    depends_on:
+      nats:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    restart: unless-stopped
+
 volumes:
   postgres_data:
   minio_data:

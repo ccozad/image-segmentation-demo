@@ -6,7 +6,7 @@
 up:
 	docker compose up -d --wait postgres nats minio
 	docker compose run --rm minio-init
-	docker compose up -d --wait api
+	docker compose up -d --wait api segmentation_worker
 
 # Apply database migrations (runs Alembic inside the api image).
 migrate:

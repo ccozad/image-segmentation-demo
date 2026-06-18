@@ -4,11 +4,19 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Current state
 
-**M0 (infra) and M1 (API + storage + DB) have landed.** The repo now has the Docker Compose infra stack and the FastAPI service in `src/api/`. M2–M5 remain. The architecture below is the *target*, derived from GitHub issues #1–#6 (milestone "Image Segmentation Demo v1"). Treat those issues as the source of truth; check them with `gh issue view <n>` before starting work, and update this file as milestones land.
+**M0–M2 have landed.** The repo has the Docker Compose infra stack, the FastAPI service (`src/api/`), and the segmentation worker (`src/segmentation_worker/`) with the full async loop closed (fake Pillow processing). M3–M5 remain. The architecture below is the *target*, derived from GitHub issues #1–#6 (milestone "Image Segmentation Demo v1"). Treat those issues as the source of truth; check them with `gh issue view <n>` before starting work, and update this file as milestones land.
 
-### `src/api/` layout (M1)
+### `src/api/` layout
 
-`app/config.py` (pydantic-settings), `app/db.py` (async engine/session), `app/models.py` (`Job` + `JobStatus`), `app/storage.py` (boto3 wrapper — note the separate **presign endpoint** so presigned URLs use `localhost` not the internal `minio` host), `app/schemas.py`, and `app/routes/{images,health}.py`. Alembic lives in `src/api/alembic/`. Run tests with `cd src/api && pytest` (in-memory SQLite + a fake storage, no infra needed). The blocking boto3 calls are dispatched via `run_in_threadpool`. `POST /images` is where M2 will publish `segment.request` on NATS (marked with a comment).
+`app/config.py` (pydantic-settings), `app/db.py` (async engine/session), `app/models.py` (`Job` + `JobStatus`), `app/storage.py` (boto3 wrapper — note the separate **presign endpoint** so presigned URLs use `localhost` not the internal `minio` host), `app/schemas.py`, `app/routes/{images,health}.py`. NATS lives in `app/messaging.py` (JetStream connect/stream/publisher + the injectable `get_publisher`) and `app/events.py` (the `on_status`/`on_result` DB updates). `app/main.py`'s lifespan connects to JetStream, ensures the stream, and starts the durable event subscribers. Alembic is in `src/api/alembic/`. Run tests with `cd src/api && pytest` (in-memory SQLite + fake storage + fake publisher; lifespan/NATS does **not** run under the test transport). Blocking boto3 calls go through `run_in_threadpool`.
+
+### `src/segmentation_worker/` layout (M2)
+
+`worker/config.py`, `worker/storage.py` (download/upload/`object_exists`), `worker/processing.py` (`render_annotation` — the fake Pillow rectangle, swapped for SAM 3 in M3), `worker/messaging.py` (shared JetStream constants + `Publisher`), `worker/worker.py` (`process_job` blocking core + `handle_request` + the `main()` durable-consumer loop with SIGTERM drain). Blocking work runs via `asyncio.to_thread`. `cd src/segmentation_worker && pytest` mocks NATS + S3.
+
+### JetStream messaging (M2)
+
+One stream **`SEGMENT`** holds subjects `segment.request|status|result`. Both API and worker call an idempotent `ensure_stream`. Durable consumers (manual ack): worker `seg-worker` on `segment.request`; API `seg-api-status`/`seg-api-result`. **The worker never touches Postgres** — it only publishes events; the API's subscriber applies them to the `Job` row. State machine is guarded (only `pending→processing`; result is terminal) so redelivery is safe. Worker idempotency: it `head_object`s the annotated key and skips re-upload on redelivery. At-least-once redelivery on worker crash is the reason for JetStream (verified by killing the worker mid-job).
 
 ## What this becomes
 

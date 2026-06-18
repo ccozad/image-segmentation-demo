@@ -13,6 +13,8 @@ class Settings(BaseSettings):
 
     database_url: str = "postgresql+asyncpg://segdemo:segdemo@postgres:5432/segdemo"
 
+    nats_url: str = "nats://nats:4222"
+
     # Object storage. When s3_endpoint is set (dev/MinIO) clients use path-style
     # addressing; when unset (prod) they fall back to default AWS S3 (M5).
     s3_endpoint: str | None = None
