@@ -4,7 +4,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Current state
 
-The repository is still at the scaffold stage. As of this writing it contains only `README.md` (title) and `.gitattributes` (LF normalization) — **no code from any milestone has landed yet.** The architecture below is the *target*, derived from GitHub issues #1–#6 (milestone "Image Segmentation Demo v1"). Treat those issues as the source of truth; check them with `gh issue view <n>` before starting work, and update this file as milestones land.
+**M0 (infra) and M1 (API + storage + DB) have landed.** The repo now has the Docker Compose infra stack and the FastAPI service in `src/api/`. M2–M5 remain. The architecture below is the *target*, derived from GitHub issues #1–#6 (milestone "Image Segmentation Demo v1"). Treat those issues as the source of truth; check them with `gh issue view <n>` before starting work, and update this file as milestones land.
+
+### `src/api/` layout (M1)
+
+`app/config.py` (pydantic-settings), `app/db.py` (async engine/session), `app/models.py` (`Job` + `JobStatus`), `app/storage.py` (boto3 wrapper — note the separate **presign endpoint** so presigned URLs use `localhost` not the internal `minio` host), `app/schemas.py`, and `app/routes/{images,health}.py`. Alembic lives in `src/api/alembic/`. Run tests with `cd src/api && pytest` (in-memory SQLite + a fake storage, no infra needed). The blocking boto3 calls are dispatched via `run_in_threadpool`. `POST /images` is where M2 will publish `segment.request` on NATS (marked with a comment).
 
 ## What this becomes
 
