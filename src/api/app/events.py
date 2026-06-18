@@ -33,6 +33,7 @@ async def on_result(data: dict) -> None:
             return
         if data.get("status") == JobStatus.FAILED:
             job.status = JobStatus.FAILED
+            job.error = data.get("error")
         else:
             job.status = JobStatus.DONE
             job.annotated_key = data.get("annotated_key")

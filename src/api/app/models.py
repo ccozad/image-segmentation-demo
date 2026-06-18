@@ -37,3 +37,5 @@ class Job(Base):
     completed_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
+    # Failure reason when status == failed (surfaced in the UI, M4).
+    error: Mapped[str | None] = mapped_column(String(2048), nullable=True)

@@ -49,10 +49,11 @@ class Publisher:
     async def publish_result(
         self,
         job_id: str | UUID,
-        annotated_key: str,
-        mask_count: int,
-        processing_ms: int,
+        annotated_key: str | None = None,
+        mask_count: int | None = None,
+        processing_ms: int | None = None,
         status: str = STATUS_DONE,
+        error: str | None = None,
     ) -> None:
         payload = {
             "job_id": str(job_id),
@@ -60,5 +61,6 @@ class Publisher:
             "annotated_key": annotated_key,
             "mask_count": mask_count,
             "processing_ms": processing_ms,
+            "error": error,
         }
         await self._js.publish(SUBJECT_RESULT, json.dumps(payload).encode())

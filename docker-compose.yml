@@ -95,16 +95,33 @@ services:
       retries: 10
       start_period: 10s
 
+  # M3: runs real SAM 3 on a GPU. Requires an NVIDIA GPU host + the NVIDIA
+  # Container Toolkit (Linux) or Docker Desktop's WSL2 GPU support (Windows).
+  # This service will NOT start on a machine without a GPU. See the README.
   segmentation_worker:
     build: ./src/segmentation_worker
     env_file: .env
+    environment:
+      # Token for the gated facebook/sam3.1 checkpoint (set HF_TOKEN in .env).
+      HF_TOKEN: ${HF_TOKEN:-}
     depends_on:
       nats:
         condition: service_healthy
       minio:
         condition: service_healthy
+    volumes:
+      # Persist the large checkpoint across restarts (HF_HOME in the image).
+      - hf_cache:/opt/hf-cache
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
     restart: unless-stopped
 
 volumes:
   postgres_data:
   minio_data:
+  hf_cache:

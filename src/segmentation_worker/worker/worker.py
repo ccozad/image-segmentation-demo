@@ -1,21 +1,21 @@
 import asyncio
 import json
-import random
 import signal
+import sys
 import time
-from collections.abc import Callable
 
 import structlog
 
 from .config import Settings, get_settings
 from .messaging import (
     SUBJECT_REQUEST,
+    STATUS_FAILED,
     STATUS_PROCESSING,
     Publisher,
     connect,
     ensure_stream,
 )
-from .processing import render_annotation
+from .segmentation import SegmentationError, Segmenter
 from .storage import Storage
 
 log = structlog.get_logger()
@@ -24,38 +24,46 @@ log = structlog.get_logger()
 def process_job(
     data: dict,
     storage: Storage,
+    segmenter,
     raw_bucket: str,
     annotated_bucket: str,
-    sleep: Callable[[], None] | None = None,
 ) -> dict:
-    """Blocking work: download, fake-annotate, upload. Idempotent re-run safe.
+    """Blocking work: download, segment, upload. Runs off the event loop via
+    ``asyncio.to_thread``.
 
-    Returns the segment.result payload fields. Runs off the event loop via
-    ``asyncio.to_thread`` so blocking boto3/Pillow calls don't stall NATS.
+    Idempotent: a redelivered request whose annotated output already exists
+    recovers its metadata instead of re-running GPU inference. Raises
+    SegmentationError if inference fails (caller reports the job as failed).
     """
     job_id = data["job_id"]
     raw_key = data["raw_key"]
     prompt = data["prompt"]
     annotated_key = f"{job_id}.png"
 
-    start = time.monotonic()
-    # Idempotency: a redelivered request whose output already exists is a no-op
-    # for the expensive work; we still report the result so the API converges.
-    if storage.object_exists(annotated_bucket, annotated_key):
+    existing = storage.head(annotated_bucket, annotated_key)
+    if existing is not None:
         log.info("job.skip_existing", job_id=job_id, annotated_key=annotated_key)
-    else:
-        raw = storage.download_bytes(raw_bucket, raw_key)
-        annotated = render_annotation(raw, prompt)
-        if sleep is None:
-            time.sleep(random.uniform(1.0, 2.0))  # simulate work
-        else:
-            sleep()
-        storage.upload_bytes(annotated_bucket, annotated_key, annotated, "image/png")
+        return {
+            "annotated_key": annotated_key,
+            "mask_count": int(existing.get("mask-count", 0) or 0),
+            "processing_ms": int(existing.get("processing-ms", 0) or 0),
+        }
 
+    raw = storage.download_bytes(raw_bucket, raw_key)
+    start = time.monotonic()
+    annotated_png, mask_count = segmenter.segment(raw, prompt)
     processing_ms = int((time.monotonic() - start) * 1000)
+
+    storage.upload_bytes(
+        annotated_bucket,
+        annotated_key,
+        annotated_png,
+        "image/png",
+        metadata={"mask-count": mask_count, "processing-ms": processing_ms},
+    )
     return {
         "annotated_key": annotated_key,
-        "mask_count": 1,
+        "mask_count": mask_count,
         "processing_ms": processing_ms,
     }
 
@@ -63,28 +71,43 @@ def process_job(
 async def handle_request(
     data: dict,
     storage: Storage,
+    segmenter,
     publisher: Publisher,
     settings: Settings,
-    sleep: Callable[[], None] | None = None,
 ) -> None:
     job_id = data["job_id"]
     log.info("job.received", job_id=job_id, prompt=data.get("prompt"))
     await publisher.publish_status(job_id, STATUS_PROCESSING)
-    result = await asyncio.to_thread(
-        process_job,
-        data,
-        storage,
-        settings.raw_bucket,
-        settings.annotated_bucket,
-        sleep,
-    )
+    try:
+        result = await asyncio.to_thread(
+            process_job,
+            data,
+            storage,
+            segmenter,
+            settings.raw_bucket,
+            settings.annotated_bucket,
+        )
+    except SegmentationError as exc:
+        # Deterministic inference failure -> report failed and ack (no redelivery).
+        log.warning("job.failed", job_id=job_id, error=str(exc))
+        await publisher.publish_result(
+            job_id, status=STATUS_FAILED, error=str(exc)
+        )
+        return
     await publisher.publish_result(job_id, **result)
     log.info("job.done", job_id=job_id, **result)
 
 
 async def main() -> None:
     settings = get_settings()
+    if not settings.hf_token:
+        log.error("worker.no_hf_token", detail="HF_TOKEN is required for the gated SAM 3 checkpoint")
+        sys.exit(1)
+
     storage = Storage(settings)
+    # Preload the model once (large; per-request reload would be unusable).
+    segmenter = Segmenter()
+
     nc, js = await connect(settings.nats_url)
     await ensure_stream(js)
     publisher = Publisher(js)
@@ -97,14 +120,13 @@ async def main() -> None:
     async def on_request(msg) -> None:
         try:
             data = json.loads(msg.data)
-            await handle_request(data, storage, publisher, settings)
+            await handle_request(data, storage, segmenter, publisher, settings)
             await msg.ack()
         except Exception:
-            log.exception("job.failed")
-            # Negative-ack so JetStream redelivers (at-least-once).
+            # Non-inference failure (download / NATS / etc.) -> redeliver.
+            log.exception("job.error")
             await msg.nak()
 
-    # Durable consumer => unacked messages are redelivered after a restart.
     await js.subscribe(
         SUBJECT_REQUEST, durable="seg-worker", manual_ack=True, cb=on_request
     )
