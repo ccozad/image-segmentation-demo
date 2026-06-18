@@ -1,12 +1,20 @@
-.PHONY: up down logs clean migrate
+.PHONY: up up-gpu down logs clean migrate
 
-# Bring up the long-running infra services and wait until healthy, then run the
-# one-shot bucket init in the foreground (its exit code propagates, and --wait
-# would otherwise treat the one-shot's clean exit as a failure).
+# Bring up the stack WITHOUT the GPU worker (works on any machine). Brings up
+# infra, creates buckets, starts the API + web frontend, and migrates.
+# Jobs stay "pending" until a GPU worker is running (see `up-gpu`).
 up:
 	docker compose up -d --wait postgres nats minio
 	docker compose run --rm minio-init
-	docker compose up -d --wait api segmentation_worker
+	docker compose up -d --wait api web
+	$(MAKE) migrate
+
+# Full stack including the GPU segmentation worker. Requires an NVIDIA GPU host.
+up-gpu:
+	docker compose --profile gpu up -d --wait postgres nats minio
+	docker compose run --rm minio-init
+	docker compose --profile gpu up -d --wait api web segmentation_worker
+	$(MAKE) migrate
 
 # Apply database migrations (runs Alembic inside the api image).
 migrate:

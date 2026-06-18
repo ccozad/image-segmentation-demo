@@ -15,26 +15,40 @@ cp .env.example .env
 make up
 ```
 
-This brings up the infrastructure services:
+`make up` brings up the stack **without** the GPU worker — it works on any
+machine — and opens the frontend at **<http://localhost:5173>**:
 
+- **Web** — React frontend (`localhost:5173`)
+- **API** — FastAPI (`localhost:8000`)
 - **Postgres** — job metadata (`localhost:5432`)
 - **NATS** — async message bus (`localhost:4222`, monitoring on `:8222`)
 - **MinIO** — S3-compatible object storage (API `localhost:9000`, console `localhost:9001`)
 
 On first boot a one-shot init container creates the `raw` and `annotated`
-buckets. Default MinIO console login is `minioadmin` / `minioadmin`.
+buckets (MinIO console login `minioadmin` / `minioadmin`), and `make up`
+applies database migrations automatically.
 
-The API is at `localhost:8000`. After it's up, apply migrations with `make migrate`.
+Without the GPU worker, uploads succeed and appear in the history as **pending**
+(nothing processes them). To get real segmentation, run the full stack with
+`make up-gpu` on a GPU host (see below).
+
+> **macOS note:** `localhost` resolves to IPv6 first. If you have another dev
+> server already bound to `[::1]:5173`, it will shadow this one — use
+> <http://127.0.0.1:5173> to be sure you're hitting the container.
 
 Make targets:
 
-| Command      | Description                                  |
-| ------------ | -------------------------------------------- |
-| `make up`    | Start services and wait until healthy        |
-| `make migrate` | Apply database migrations (Alembic)        |
-| `make down`  | Stop services (volumes preserved)            |
-| `make logs`  | Tail logs from all services                  |
-| `make clean` | Stop services and delete volumes (full reset)|
+| Command        | Description                                            |
+| -------------- | ----------------------------------------------------- |
+| `make up`      | Start the stack **without** the GPU worker, + migrate |
+| `make up-gpu`  | Start the full stack **including** the GPU worker     |
+| `make migrate` | Apply database migrations (Alembic)                   |
+| `make down`    | Stop services (volumes preserved)                     |
+| `make logs`    | Tail logs from all services                           |
+| `make clean`   | Stop services and delete volumes (full reset)         |
+
+The frontend can also be developed directly on the host:
+`cd src/web && npm install && npm run dev`.
 
 ## Running the segmentation worker (GPU required)
 
@@ -81,12 +95,11 @@ Non-Compose users can pass `--gpus all` to `docker run` instead of the Compose
 
 ```sh
 cp .env.example .env      # then edit HF_TOKEN
-make up                   # builds the CUDA worker image (large first build)
-make migrate
+make up-gpu               # full stack incl. worker (large first build + checkpoint download)
 ```
 
-Upload an image with a concept prompt (e.g. via the API or the M4 frontend) and
-the worker highlights matching instances. A prompt with no matches returns the
+Open <http://localhost:5173>, upload an image with a concept prompt, and the
+worker highlights matching instances. A prompt with no matches returns the
 original image with `mask_count = 0`.
 
 ## Architecture

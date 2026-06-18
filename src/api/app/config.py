@@ -15,6 +15,10 @@ class Settings(BaseSettings):
 
     nats_url: str = "nats://nats:4222"
 
+    # Browser origins allowed to call the API (the React frontend, M4).
+    # Override via CORS_ORIGINS as a JSON array in prod.
+    cors_origins: list[str] = ["http://localhost:5173"]
+
     # Object storage. When s3_endpoint is set (dev/MinIO) clients use path-style
     # addressing; when unset (prod) they fall back to default AWS S3 (M5).
     s3_endpoint: str | None = None
