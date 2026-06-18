@@ -95,10 +95,24 @@ services:
       retries: 10
       start_period: 10s
 
+  web:
+    build:
+      context: ./src/web
+      target: dev
+    environment:
+      # The browser runs on the host, so it reaches the API at localhost:8000.
+      VITE_API_URL: ${VITE_API_URL:-http://localhost:8000}
+    ports:
+      - "5173:5173"
+    depends_on:
+      - api
+
   # M3: runs real SAM 3 on a GPU. Requires an NVIDIA GPU host + the NVIDIA
   # Container Toolkit (Linux) or Docker Desktop's WSL2 GPU support (Windows).
-  # This service will NOT start on a machine without a GPU. See the README.
+  # Behind the "gpu" profile so the rest of the stack (incl. the frontend) runs
+  # on a machine without a GPU. Start it with `make up-gpu` / --profile gpu.
   segmentation_worker:
+    profiles: ["gpu"]
     build: ./src/segmentation_worker
     env_file: .env
     environment:
