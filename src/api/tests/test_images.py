@@ -5,7 +5,7 @@ PNG_BYTES = bytes.fromhex(
 )
 
 
-async def test_upload_then_list_and_detail(client, fake_storage):
+async def test_upload_then_list_and_detail(client, fake_storage, fake_publisher):
     resp = await client.post(
         "/images",
         files={"file": ("sample.png", PNG_BYTES, "image/png")},
@@ -18,6 +18,9 @@ async def test_upload_then_list_and_detail(client, fake_storage):
 
     # Raw bytes persisted to the raw bucket under {id}.png.
     assert ("raw", f"{job_id}.png") in fake_storage.objects
+
+    # A segment.request was handed off to the worker.
+    assert fake_publisher.requests == [(job_id, f"{job_id}.png", "cars")]
 
     # History list shows the new job, newest-first, pending, with a raw URL.
     resp = await client.get("/images")

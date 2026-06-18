@@ -9,6 +9,7 @@ from starlette.concurrency import run_in_threadpool
 
 from ..config import Settings, get_settings
 from ..db import get_session
+from ..messaging import Publisher, get_publisher
 from ..models import Job, JobStatus
 from ..schemas import JobCreated, JobRead
 from ..storage import Storage, get_storage
@@ -56,6 +57,7 @@ async def create_image(
     session: AsyncSession = Depends(get_session),
     storage: Storage = Depends(get_storage),
     settings: Settings = Depends(get_settings),
+    publisher: Publisher = Depends(get_publisher),
 ) -> JobCreated:
     ext = ALLOWED_CONTENT_TYPES.get(file.content_type or "")
     if ext is None:
@@ -78,7 +80,9 @@ async def create_image(
     session.add(job)
     await session.commit()
 
-    # M2: publish segment.request{job_id, raw_key, prompt} on NATS here.
+    # Hand off to the worker. The row already exists; the event subscriber only
+    # updates it as segment.status / segment.result arrive.
+    await publisher.publish_request(job_id, raw_key, prompt)
     log.info("image.created", job_id=str(job_id), prompt=prompt, raw_key=raw_key)
     return JobCreated(job_id=job_id, status=JobStatus.PENDING)
 
