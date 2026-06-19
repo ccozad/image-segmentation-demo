@@ -14,8 +14,9 @@ class Settings(BaseSettings):
 
     s3_endpoint: str | None = None
     s3_region: str = "us-east-1"
-    aws_access_key_id: str = "minioadmin"
-    aws_secret_access_key: str = "minioadmin"
+    # Unset in prod so boto3 uses its default credential chain (instance role).
+    aws_access_key_id: str | None = None
+    aws_secret_access_key: str | None = None
 
     raw_bucket: str = "raw"
     annotated_bucket: str = "annotated"

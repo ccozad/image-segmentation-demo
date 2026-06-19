@@ -27,8 +27,10 @@ class Settings(BaseSettings):
     # so presigning uses this when set.
     s3_public_endpoint: str | None = None
     s3_region: str = "us-east-1"
-    aws_access_key_id: str = "minioadmin"
-    aws_secret_access_key: str = "minioadmin"
+    # Left unset in prod so boto3 uses its default credential chain (e.g. an
+    # EC2 instance role). Dev sets these to the MinIO root creds via .env.
+    aws_access_key_id: str | None = None
+    aws_secret_access_key: str | None = None
 
     raw_bucket: str = "raw"
     annotated_bucket: str = "annotated"
