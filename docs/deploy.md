@@ -11,6 +11,10 @@ differently for prod (a static nginx bundle instead of the Vite dev server).
 > ⚠️ This document has **not** been executed end-to-end (it needs a GPU host,
 > the gated SAM 3 checkpoint, and a public domain). Treat the exact versions and
 > the cost figure as starting points to verify, not guarantees.
+>
+> Just want to **test the GPU worker** (not a public deploy)? See
+> [`test-on-aws.md`](./test-on-aws.md) — the dev stack on a GPU instance over an
+> SSH tunnel, no domain/TLS/S3 required.
 
 ## Cost — read this first
 

@@ -124,6 +124,10 @@ To run the full stack on a single GPU host with real S3 and automatic HTTPS, see
 **[docs/deploy.md](docs/deploy.md)**. It uses `docker-compose.prod.yml`
 (production images — non-root, healthchecked — plus a Caddy TLS reverse proxy).
 
+Just want to **test the GPU worker** without a Mac/WSL GPU? See
+**[docs/test-on-aws.md](docs/test-on-aws.md)** — run the dev stack on a GPU EC2
+instance and reach it over an SSH tunnel (no domain, TLS, or real S3 needed).
+
 ## License
 
 [MIT](LICENSE)
