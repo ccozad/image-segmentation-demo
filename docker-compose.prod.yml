@@ -1,0 +1,54 @@
+# Production overlay. Layer it on top of the base compose file:
+#
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml --profile gpu \
+#     up -d --build postgres nats api web segmentation_worker caddy
+#
+# MinIO is intentionally omitted here — set real AWS S3 env in .env (leave
+# S3_ENDPOINT unset). See docs/deploy.md for the full recipe.
+services:
+  postgres:
+    restart: always
+
+  nats:
+    restart: always
+
+  api:
+    restart: always
+
+  segmentation_worker:
+    restart: always
+
+  web:
+    build:
+      context: ./src/web
+      target: prod
+      args:
+        # Baked into the static bundle at build time (the browser calls this).
+        VITE_API_URL: ${PUBLIC_API_URL:?set PUBLIC_API_URL in .env}
+    # Served behind Caddy; drop the dev host port.
+    ports: !reset []
+    expose:
+      - "8080"
+    restart: always
+
+  # Reverse proxy + automatic HTTPS (Let's Encrypt) in front of web + api.
+  caddy:
+    image: caddy:2-alpine
+    depends_on:
+      - web
+      - api
+    environment:
+      APP_DOMAIN: ${APP_DOMAIN:?set APP_DOMAIN in .env}
+      API_DOMAIN: ${API_DOMAIN:?set API_DOMAIN in .env}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    restart: always
+
+volumes:
+  caddy_data:
+  caddy_config:

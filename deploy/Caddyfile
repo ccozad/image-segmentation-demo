@@ -1,0 +1,12 @@
+# Automatic HTTPS via Let's Encrypt. Point both DNS records at the host, then
+# Caddy provisions certificates on first request.
+#
+# APP_DOMAIN / API_DOMAIN are injected from the environment by docker-compose.prod.yml.
+
+{$APP_DOMAIN} {
+	reverse_proxy web:8080
+}
+
+{$API_DOMAIN} {
+	reverse_proxy api:8000
+}

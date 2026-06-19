@@ -1,8 +1,10 @@
 import asyncio
 import json
+import os
 import signal
 import sys
 import time
+from pathlib import Path
 
 import structlog
 
@@ -130,10 +132,15 @@ async def main() -> None:
     await js.subscribe(
         SUBJECT_REQUEST, durable="seg-worker", manual_ack=True, cb=on_request
     )
+    # Liveness marker for the container HEALTHCHECK: written once the model is
+    # loaded and we're subscribed (i.e. ready to process).
+    health_file = Path(os.environ.get("WORKER_HEALTH_FILE", "/tmp/worker-ready"))
+    health_file.touch()
     log.info("worker.ready", nats=settings.nats_url)
 
     await stop.wait()
     log.info("worker.shutdown")
+    health_file.unlink(missing_ok=True)
     await nc.drain()
 
 

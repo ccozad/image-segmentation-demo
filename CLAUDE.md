@@ -4,9 +4,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Current state
 
-**M0–M4 have landed; M5 remains.** Infra stack, FastAPI (`src/api/`), the SAM 3 worker (`src/segmentation_worker/`, CUDA), and the React frontend (`src/web/`). **M3 is code-complete but UNVERIFIED — it needs an NVIDIA GPU + the gated `facebook/sam3.1` checkpoint (HF_TOKEN), so it was never built/run; only CPU-safe unit tests ran.** Verify M3 on a GPU box.
+**All six milestones (M0–M5) have landed.** Infra stack, FastAPI (`src/api/`), the SAM 3 worker (`src/segmentation_worker/`, CUDA), the React frontend (`src/web/`), and the prod deployment shape. **Two things remain UNVERIFIED because they need a GPU/cloud: (1) the M3 worker image + SAM 3 inference (never built/run; only CPU-safe unit tests ran), and (2) the M5 cloud deploy (`docs/deploy.md`).** Verify both on a GPU host.
 
-Because M3 made the worker GPU-only, the worker is behind a Compose **`gpu` profile**: `make up` runs everything *except* the worker (works anywhere, incl. CI/Mac; auto-migrates); `make up-gpu` adds the worker. Without the worker, uploads stay `pending` — expected. The architecture below is the *target*, derived from GitHub issues #1–#6 (milestone "Image Segmentation Demo v1"). Treat those issues as the source of truth; check them with `gh issue view <n>` before starting work, and update this file as milestones land.
+Because M3 made the worker GPU-only, the worker is behind a Compose **`gpu` profile**: `make up` runs everything *except* the worker (works anywhere, incl. CI/Mac; auto-migrates); `make up-gpu` adds the worker. Without the worker, uploads stay `pending` — expected.
+
+### Deployment (M5)
+
+Storage is env-switched in `storage.py` (both api + worker): `S3_ENDPOINT` set → MinIO path-style; unset → real AWS S3 virtual-hosted. AWS creds default to `None` so boto3 uses its default chain (EC2 instance role) when unset. Same api/worker images run dev and prod — only env changes. Prod overlay is `docker-compose.prod.yml` (web `prod` target = nginx-unprivileged on 8080, behind a `caddy` TLS reverse proxy with two subdomains; MinIO omitted). Dockerfiles are hardened: multi-stage, non-root (`appuser` / nginx uid 101), pinned bases (patch tags — pin to digests for full reproducibility), HEALTHCHECKs (worker uses a `/tmp/worker-ready` heartbeat written at ready). Full recipe: `docs/deploy.md`. The architecture below is the *target*, derived from GitHub issues #1–#6 (milestone "Image Segmentation Demo v1"). Treat those issues as the source of truth; check them with `gh issue view <n>` before starting work, and update this file as milestones land.
 
 ### `src/api/` layout
 

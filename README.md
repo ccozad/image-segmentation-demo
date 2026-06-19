@@ -115,7 +115,14 @@ React SPA ──HTTP──> FastAPI ──> Postgres (Job rows)
 The API persists the upload and publishes a request on NATS; the worker segments
 and reports status/results back over NATS; the API applies them to the job row.
 The worker never touches the database directly. Storage is env-switched: MinIO in
-dev, real AWS S3 in prod (M5). The React frontend lands in M4.
+dev, real AWS S3 in prod — the same API/worker images run in both; only env
+changes.
+
+## Deployment
+
+To run the full stack on a single GPU host with real S3 and automatic HTTPS, see
+**[docs/deploy.md](docs/deploy.md)**. It uses `docker-compose.prod.yml`
+(production images — non-root, healthchecked — plus a Caddy TLS reverse proxy).
 
 ## License
 

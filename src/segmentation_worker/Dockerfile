@@ -45,4 +45,15 @@ COPY pyproject.toml ./
 COPY worker ./worker
 RUN pip install .
 
+# Run as an unprivileged user; ensure the HF cache + app dirs are writable.
+RUN useradd --system --uid 1001 appuser \
+    && mkdir -p /opt/hf-cache \
+    && chown -R appuser /app /opt/hf-cache /opt/venv
+USER appuser
+
+# Liveness: worker.py touches /tmp/worker-ready once it has connected to NATS
+# and subscribed. The long start-period covers first-boot checkpoint download.
+HEALTHCHECK --interval=30s --timeout=5s --start-period=600s --retries=5 \
+    CMD test -f /tmp/worker-ready || exit 1
+
 CMD ["python", "-m", "worker.worker"]
