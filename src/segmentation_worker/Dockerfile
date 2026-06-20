@@ -43,6 +43,11 @@ RUN git clone https://github.com/facebookresearch/sam3.git /opt/sam3 \
     && git checkout ${SAM3_REF} \
     && pip install -e .
 
+# SAM 3's core model code imports einops (sam3/sam/rope.py) but only declares it
+# under an optional `notebooks` extra, so `pip install -e .` above doesn't pull
+# it. Install it explicitly. (Separate layer so the SAM 3 clone stays cached.)
+RUN pip install einops
+
 # 4) The worker package + its (CPU-light) dependencies.
 COPY pyproject.toml ./
 COPY worker ./worker
