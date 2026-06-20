@@ -4,7 +4,7 @@ An end-to-end async image segmentation pipeline. Upload an image plus a free-tex
 concept prompt (e.g. "cars"), and the system segments instances of that concept
 and returns an annotated image. A React frontend talks to a FastAPI service that
 persists raw images to object storage and dispatches work over NATS to a Python
-worker running SAM 3 + OpenCV 5.
+worker running SAM 3 + OpenCV.
 
 ## Run locally
 
@@ -109,7 +109,7 @@ React SPA ──HTTP──> FastAPI ──> Postgres (Job rows)
                        │              ▲
                   raw bytes        status/result updates
                        ▼              │
-                    MinIO/S3   <─ NATS ─> segmentation worker (SAM 3 + OpenCV 5, GPU)
+                    MinIO/S3   <─ NATS ─> segmentation worker (SAM 3 + OpenCV, GPU)
 ```
 
 The API persists the upload and publishes a request on NATS; the worker segments

@@ -1,4 +1,4 @@
-"""Real SAM 3 + OpenCV 5 segmentation (M3).
+"""Real SAM 3 + OpenCV segmentation (M3).
 
 Heavy dependencies (torch, sam3, cv2) are imported lazily inside the class /
 functions so that importing this module — and therefore the worker plumbing —
