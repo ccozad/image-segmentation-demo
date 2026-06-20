@@ -1,7 +1,7 @@
 # Testing on a GPU EC2 instance
 
-The worker needs an NVIDIA GPU, so the M3 (SAM 3) and M5 (worker image) pieces
-can't run on a Mac or a machine without WSL/GPU. This is the quickest way to
+The worker needs an NVIDIA GPU, so the SAM 3 segmentation can't run on a machine
+without one. If your development machine has no GPU, this is the quickest way to
 exercise the **whole stack on a real GPU** without doing a full production
 deploy.
 
@@ -71,8 +71,8 @@ docker compose logs -f segmentation_worker   # wait for "sam3.loaded" then "work
 
 ## 4. Open the UI through an SSH tunnel
 
-From your **Windows machine** (PowerShell or Command Prompt), forward both the
-frontend and API ports:
+From your **local machine** (any OS with an SSH client — a macOS/Linux terminal
+or Windows PowerShell), forward both the frontend and API ports:
 
 ```sh
 ssh -i your-key.pem -L 5173:localhost:5173 -L 8000:localhost:8000 ubuntu@<INSTANCE_PUBLIC_IP>

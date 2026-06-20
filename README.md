@@ -79,17 +79,18 @@ Docker volume, so later restarts skip the download.
 - **Linux:** install the
   [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html)
   so Docker can pass the GPU into containers.
-- **Windows (RTX 30-series etc.):** install a recent NVIDIA driver on Windows,
-  enable **Docker Desktop → Settings → Resources → WSL Integration**, and run all
+- **Windows:** install a recent NVIDIA driver on Windows, enable
+  **Docker Desktop → Settings → Resources → WSL Integration**, and run all
   commands **from inside a WSL2 (Ubuntu) shell** — not PowerShell. Inside WSL2,
   `make`/`docker compose` work exactly as on Linux, and the GPU is available to
   containers via the Windows driver (no separate toolkit install needed). If you
   don't have `make` in WSL2: `sudo apt install make`. (The raw equivalents also
   work, e.g. `docker compose up -d --wait postgres nats minio`.)
+- **No local GPU?** See [docs/test-on-aws.md](docs/test-on-aws.md) to run on a
+  rented GPU instance.
 
-A 12 GB GPU (e.g. desktop RTX 3060) is sufficient for SAM 3 *image* inference.
-Non-Compose users can pass `--gpus all` to `docker run` instead of the Compose
-`deploy.resources` block.
+A 12 GB GPU is sufficient for SAM 3 *image* inference. Non-Compose users can pass
+`--gpus all` to `docker run` instead of the Compose `deploy.resources` block.
 
 ### 3. Run
 
@@ -124,7 +125,7 @@ To run the full stack on a single GPU host with real S3 and automatic HTTPS, see
 **[docs/deploy.md](docs/deploy.md)**. It uses `docker-compose.prod.yml`
 (production images — non-root, healthchecked — plus a Caddy TLS reverse proxy).
 
-Just want to **test the GPU worker** without a Mac/WSL GPU? See
+Just want to **test the GPU worker** without a local GPU? See
 **[docs/test-on-aws.md](docs/test-on-aws.md)** — run the dev stack on a GPU EC2
 instance and reach it over an SSH tunnel (no domain, TLS, or real S3 needed).
 

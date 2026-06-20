@@ -27,25 +27,39 @@ A GPU host bills by the hour whether or not anyone is using the demo.
 
 Prices change — confirm current rates before provisioning, and **stop or
 terminate the instance when you're done**. A spot instance or a scheduled
-stop/start cuts this substantially. (Your own RTX 3060 box costs only
-electricity and is the cheapest place to run this.)
+stop/start cuts this substantially. (A local NVIDIA GPU, if you have one, avoids
+the hourly cost entirely.)
 
 ## 1. Provision the host
 
-- A GPU VM with **≥ 16 GB VRAM** (T4/A10G class; a 12 GB card like an RTX 3060
-  also works for image inference), **≥ 30 GB disk** (CUDA image + checkpoint),
-  Ubuntu 24.04.
+- A GPU VM with **≥ 16 GB VRAM** (T4/A10G class; a 12 GB card also works for
+  image inference), **≥ 30 GB disk** (CUDA image + checkpoint), Ubuntu 24.04.
 - Open inbound **80** and **443** (Caddy needs both for ACME/HTTPS).
 
-## 2. Install Docker + the NVIDIA Container Toolkit
+## 2. Install the GPU driver, Docker, and the NVIDIA Container Toolkit
+
+Skip this if you used an AWS Deep Learning AMI (it bundles all three — jump to
+the sanity check). On a plain Ubuntu host:
 
 ```sh
+# NVIDIA driver — must support CUDA >= 12.6 (the worker image), so use a
+# 560-or-newer -server driver. Reboot after; `nvidia-smi` should then work and
+# report "CUDA Version: 12.6" or higher.
+sudo apt-get update && sudo apt-get install -y nvidia-driver-580-server && sudo reboot
+# (if the module fails to load: `sudo apt-get install -y linux-headers-$(uname -r)`,
+#  then reinstall the driver and reboot)
+
 # Docker Engine + compose plugin
 curl -fsSL https://get.docker.com | sh
 
-# NVIDIA Container Toolkit (lets containers see the GPU)
+# NVIDIA Container Toolkit — add the apt repo, install, wire it to Docker
 # https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html
-sudo apt-get install -y nvidia-container-toolkit
+curl -fsSL https://nvidia.github.io/libnvidia-container/gpgkey \
+  | sudo gpg --dearmor -o /usr/share/keyrings/nvidia-container-toolkit-keyring.gpg
+curl -s -L https://nvidia.github.io/libnvidia-container/stable/deb/nvidia-container-toolkit.list \
+  | sed 's#deb https://#deb [signed-by=/usr/share/keyrings/nvidia-container-toolkit-keyring.gpg] https://#g' \
+  | sudo tee /etc/apt/sources.list.d/nvidia-container-toolkit.list
+sudo apt-get update && sudo apt-get install -y nvidia-container-toolkit
 sudo nvidia-ctk runtime configure --runtime=docker
 sudo systemctl restart docker
 
