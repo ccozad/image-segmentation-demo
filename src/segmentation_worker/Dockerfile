@@ -1,4 +1,4 @@
-# M3: real SAM 3 + OpenCV 5 on a CUDA base. Requires an NVIDIA GPU host.
+# M3: real SAM 3 + OpenCV on a CUDA base. Requires an NVIDIA GPU host.
 # CPU is not supported.
 FROM nvidia/cuda:12.6.2-cudnn-runtime-ubuntu24.04
 
@@ -30,8 +30,11 @@ WORKDIR /app
 #    cu126 index (https://download.pytorch.org/whl/cu126).
 RUN pip install torch torchvision --index-url https://download.pytorch.org/whl/cu126
 
-# 2) OpenCV 5 (headless — no GUI needed in a container).
-RUN pip install "opencv-python-headless>=5,<6"
+# 2) OpenCV (headless — no GUI in a container).
+#    NOTE: OpenCV 5 is not on PyPI yet — the opencv-python packages top out at
+#    4.13.x. Our overlay uses stable cv2 APIs that are unchanged in 5.x, so we
+#    pin to the latest 4.x; bump the ceiling once 5.x wheels ship.
+RUN pip install "opencv-python-headless>=4.10,<5"
 
 # 3) SAM 3 from source. Pin SAM3_REF to a specific commit for reproducibility.
 ARG SAM3_REF=main
