@@ -151,6 +151,10 @@ Just want to **test the GPU worker** without a local GPU? See
 **[docs/test-on-aws.md](docs/test-on-aws.md)** — run the dev stack on a GPU EC2
 instance and reach it over an SSH tunnel (no domain, TLS, or real S3 needed).
 
+Scaling out to a **pool of spot GPU workers** behind a durable broker is
+**[docs/scaling.md](docs/scaling.md)** — the worker already fans out via a shared
+JetStream pull consumer.
+
 ## License
 
 [MIT](LICENSE)
