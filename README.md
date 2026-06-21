@@ -57,6 +57,11 @@ NVIDIA GPU host** — CPU is not supported. The `segmentation_worker` service wi
 not start on a machine without a GPU. (The infra + API services run fine without
 one; you just won't get annotations.)
 
+> Getting SAM 3 to run in a container is genuinely finicky (incomplete declared
+> dependencies, a required bf16 autocast, driver/CUDA constraints). The full
+> reproducible recipe — with the reasoning behind every version pin — is in
+> **[docs/sam3-recipe.md](docs/sam3-recipe.md)**.
+
 ### 1. Hugging Face access + token
 
 The `facebook/sam3.1` checkpoint is gated:
