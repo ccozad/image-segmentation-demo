@@ -132,11 +132,12 @@ sudo -u ubuntu make up-gpu
 
 ## Troubleshooting
 
-- **Build fails / no `sam3.loaded`:** the worker image has unverified version
-  pins (`SAM3_REF=main`, torch cu126 wheels, OpenCV 5). Capture
-  `docker compose logs segmentation_worker` and the build output — those pins in
-  `src/segmentation_worker/Dockerfile` / `worker/segmentation.py` are the likely
-  fix points.
+- **Build fails / no `sam3.loaded`:** the worker has known sharp edges — SAM 3's
+  incomplete dependency closure, the required bf16 autocast, the ≥ 560 driver /
+  CUDA 12.6 constraint, and `SAM3_REF=main` being unpinned. The full recipe and
+  the fixes for each are in [`sam3-recipe.md`](./sam3-recipe.md). Capture
+  `docker compose logs segmentation_worker` and the build output if you hit
+  something new.
 - **`could not select device driver "nvidia"`:** the NVIDIA Container Toolkit
   isn't active — see `deploy.md` §2.
 - **Out of disk during build:** the root volume is too small; relaunch with ~80 GB.
