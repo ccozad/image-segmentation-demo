@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { getImage, listImages, uploadImage } from '../api/client'
+import { deleteImage, getImage, listImages, uploadImage } from '../api/client'
 
 afterEach(() => {
   vi.restoreAllMocks()
@@ -41,6 +41,14 @@ describe('apiClient', () => {
     const fetchMock = mockFetch({ id: 'job-1' })
     await getImage('job-1')
     expect(String(fetchMock.mock.calls[0][0])).toMatch(/\/images\/job-1$/)
+  })
+
+  it('deleteImage sends DELETE to the job URL', async () => {
+    const fetchMock = mockFetch({}, true, 204)
+    await deleteImage('job-1')
+    const [url, init] = fetchMock.mock.calls[0]
+    expect(String(url)).toMatch(/\/images\/job-1$/)
+    expect(init.method).toBe('DELETE')
   })
 
   it('throws on a non-ok response', async () => {

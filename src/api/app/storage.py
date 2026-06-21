@@ -46,6 +46,10 @@ class Storage:
             ExpiresIn=ttl,
         )
 
+    def delete(self, bucket: str, key: str) -> None:
+        """Delete an object (idempotent — no error if the key is absent)."""
+        self._client.delete_object(Bucket=bucket, Key=key)
+
     def check(self) -> None:
         """Connectivity probe for healthchecks (raises on failure)."""
         self._client.list_buckets()

@@ -5,9 +5,10 @@ import { StatusBadge } from './StatusBadge'
 interface Props {
   jobs: Job[]
   onSelect: (id: string) => void
+  onDelete: (id: string) => void
 }
 
-export function HistoryList({ jobs, onSelect }: Props) {
+export function HistoryList({ jobs, onSelect, onDelete }: Props) {
   if (jobs.length === 0) {
     return <p className="empty">No images yet — upload one above to get started.</p>
   }
@@ -15,7 +16,7 @@ export function HistoryList({ jobs, onSelect }: Props) {
   return (
     <ul className="history" aria-label="Upload history">
       {jobs.map((job) => (
-        <li key={job.id}>
+        <li key={job.id} className="history-item">
           <button className="history-row" onClick={() => onSelect(job.id)}>
             {job.raw_url ? (
               <img className="thumb" src={job.raw_url} alt={`Upload for “${job.prompt}”`} />
@@ -38,6 +39,14 @@ export function HistoryList({ jobs, onSelect }: Props) {
               </span>
             </span>
             <StatusBadge status={job.status} title={job.error} />
+          </button>
+          <button
+            className="delete-btn"
+            aria-label={`Delete ${job.prompt}`}
+            title="Delete"
+            onClick={() => onDelete(job.id)}
+          >
+            ×
           </button>
         </li>
       ))}

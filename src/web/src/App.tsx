@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
-import { listImages, uploadImage } from './api/client'
+import { deleteImage, listImages, uploadImage } from './api/client'
 import { HistoryList } from './components/HistoryList'
 import { ImageDetailView } from './components/ImageDetailView'
 import { UploadForm } from './components/UploadForm'
@@ -97,6 +97,21 @@ export default function App() {
     }
   }, [])
 
+  const handleDelete = useCallback(
+    async (id: string) => {
+      // Optimistically drop it; clear the detail view if it was open.
+      setJobs((prev) => prev.filter((j) => j.id !== id))
+      setOptimistic((prev) => prev.filter((o) => o.id !== id))
+      setSelectedId((cur) => (cur === id ? null : cur))
+      try {
+        await deleteImage(id)
+      } catch {
+        // If it failed, the next poll will bring it back.
+      }
+    },
+    [],
+  )
+
   const selected = selectedId ? visible.find((j) => j.id === selectedId) : undefined
 
   return (
@@ -107,11 +122,15 @@ export default function App() {
       </header>
 
       {selected ? (
-        <ImageDetailView job={selected} onBack={() => setSelectedId(null)} />
+        <ImageDetailView
+          job={selected}
+          onBack={() => setSelectedId(null)}
+          onDelete={handleDelete}
+        />
       ) : (
         <>
           <UploadForm onUpload={handleUpload} />
-          <HistoryList jobs={visible} onSelect={setSelectedId} />
+          <HistoryList jobs={visible} onSelect={setSelectedId} onDelete={handleDelete} />
         </>
       )}
     </div>

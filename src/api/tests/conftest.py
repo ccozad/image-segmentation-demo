@@ -23,6 +23,9 @@ class FakeStorage:
     def presigned_get(self, bucket: str, key: str, ttl: int) -> str:
         return f"https://fake.local/{bucket}/{key}?ttl={ttl}"
 
+    def delete(self, bucket: str, key: str) -> None:
+        self.objects.pop((bucket, key), None)
+
     def check(self) -> None:
         return None
 

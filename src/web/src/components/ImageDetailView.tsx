@@ -6,16 +6,22 @@ import { StatusBadge } from './StatusBadge'
 interface Props {
   job: Job
   onBack: () => void
+  onDelete: (id: string) => void
 }
 
-export function ImageDetailView({ job, onBack }: Props) {
+export function ImageDetailView({ job, onBack, onDelete }: Props) {
   const inFlight = isInFlight(job.status)
 
   return (
     <section className="detail" aria-label={`Details for ${job.prompt}`}>
-      <button className="back" onClick={onBack}>
-        ← Back to history
-      </button>
+      <div className="detail-toolbar">
+        <button className="back" onClick={onBack}>
+          ← Back to history
+        </button>
+        <button className="delete-btn delete-text" onClick={() => onDelete(job.id)}>
+          Delete
+        </button>
+      </div>
 
       <header className="detail-header">
         <h2>{job.prompt}</h2>
