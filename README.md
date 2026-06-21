@@ -6,6 +6,16 @@ and returns an annotated image. A React frontend talks to a FastAPI service that
 persists raw images to object storage and dispatches work over NATS to a Python
 worker running SAM 3 + OpenCV.
 
+![SAM 3 segmenting the concept "cars" in a NYC street scene — 9 instances highlighted in the annotated view next to the original](images/image-segmentation-cars.png)
+
+> Upload an image and a free-text concept prompt; the worker highlights matching
+> instances. Here `cars` finds **9 instances** (segmented in ~5s on an NVIDIA T4).
+
+Because the prompt is just text, the **same image** with a different concept
+picks out an entirely different set of instances — here `buildings`:
+
+![SAM 3 segmenting the concept "buildings" in the same street scene — 13 building instances highlighted](images/image-segmentation-buildings.png)
+
 ## Run locally
 
 Requires Docker and Docker Compose.
@@ -110,26 +120,7 @@ original image with `mask_count = 0`.
 
 ## Architecture
 
-```mermaid
-flowchart LR
-    user([User])
-    web["React SPA<br/>web · :5173"]
-    api["FastAPI<br/>api · :8000"]
-    db[("Postgres<br/>job rows")]
-    obj[("MinIO / S3<br/>raw + annotated")]
-    nats{{"NATS JetStream"}}
-    worker["Segmentation worker<br/>SAM 3 + OpenCV · GPU"]
-
-    user --> web
-    web -->|"upload + poll · HTTP"| api
-    api -->|"persist / read jobs"| db
-    api -->|"store raw · presign URLs"| obj
-    api -->|"publish segment.request"| nats
-    nats -->|"segment.request"| worker
-    worker -->|"read raw · write annotated"| obj
-    worker -->|"segment.status / segment.result"| nats
-    nats -->|"events → update job row"| api
-```
+![Architecture: the user uses the React SPA (:5173), which uploads to and polls the FastAPI service (:8000) over HTTP. The API persists job rows to Postgres, stores raw images and presigns URLs in MinIO/S3, and publishes segment.request on NATS JetStream. The segmentation worker (SAM 3 + OpenCV, GPU) consumes the request, reads the raw image and writes the annotated one to MinIO/S3, and publishes segment.status / segment.result back on NATS, which the API turns into job-row updates.](images/image-segmentation-architecture.png)
 
 The API persists the upload and publishes a request on NATS; the worker segments
 and reports status/results back over NATS; the API applies them to the job row.
