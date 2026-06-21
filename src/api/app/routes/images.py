@@ -117,3 +117,25 @@ async def get_image(
     if job is None:
         raise HTTPException(status_code=404, detail="job not found")
     return await _to_read(job, storage, settings)
+
+
+@router.delete("/images/{job_id}", status_code=204)
+async def delete_image(
+    job_id: UUID,
+    session: AsyncSession = Depends(get_session),
+    storage: Storage = Depends(get_storage),
+    settings: Settings = Depends(get_settings),
+) -> None:
+    job = await session.get(Job, job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="job not found")
+
+    # Best-effort object cleanup, then remove the row.
+    await run_in_threadpool(storage.delete, settings.raw_bucket, job.raw_key)
+    if job.annotated_key:
+        await run_in_threadpool(
+            storage.delete, settings.annotated_bucket, job.annotated_key
+        )
+    await session.delete(job)
+    await session.commit()
+    log.info("image.deleted", job_id=str(job_id))

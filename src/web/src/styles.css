@@ -92,11 +92,17 @@ button:disabled {
   flex-direction: column;
   gap: 8px;
 }
+.history-item {
+  display: flex;
+  align-items: stretch;
+  gap: 8px;
+}
 .history-row {
   display: flex;
   align-items: center;
   gap: 12px;
-  width: 100%;
+  flex: 1;
+  min-width: 0;
   text-align: left;
   background: var(--panel);
   border: 1px solid var(--border);
@@ -107,6 +113,34 @@ button:disabled {
 }
 .history-row:hover {
   border-color: var(--accent);
+}
+
+/* Delete button */
+.delete-btn {
+  flex: none;
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--muted);
+  border-radius: 10px;
+  padding: 0 12px;
+  font-size: 1.1rem;
+  line-height: 1;
+}
+.delete-btn:hover {
+  border-color: #5e2230;
+  color: #ff9aa6;
+  background: #2a1419;
+}
+.delete-btn.delete-text {
+  font-size: 0.85rem;
+  font-weight: 600;
+  padding: 6px 12px;
+}
+.detail-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
 }
 .thumb {
   width: 56px;

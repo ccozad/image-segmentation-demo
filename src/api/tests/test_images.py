@@ -53,6 +53,29 @@ async def test_detail_404_for_unknown_id(client):
     assert resp.status_code == 404
 
 
+async def test_delete_removes_job_and_objects(client, fake_storage):
+    resp = await client.post(
+        "/images",
+        files={"file": ("sample.png", PNG_BYTES, "image/png")},
+        data={"prompt": "cars"},
+    )
+    job_id = resp.json()["job_id"]
+    assert ("raw", f"{job_id}.png") in fake_storage.objects
+
+    resp = await client.delete(f"/images/{job_id}")
+    assert resp.status_code == 204
+
+    # Object cleaned up, row gone from list + detail.
+    assert ("raw", f"{job_id}.png") not in fake_storage.objects
+    assert (await client.get("/images")).json() == []
+    assert (await client.get(f"/images/{job_id}")).status_code == 404
+
+
+async def test_delete_unknown_id_404(client):
+    resp = await client.delete("/images/00000000-0000-0000-0000-000000000000")
+    assert resp.status_code == 404
+
+
 async def test_healthz_ok(client):
     resp = await client.get("/healthz")
     assert resp.status_code == 200

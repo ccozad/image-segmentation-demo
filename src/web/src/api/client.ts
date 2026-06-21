@@ -34,4 +34,11 @@ export async function getImage(id: string): Promise<Job> {
   return asJson<Job>(resp, 'get')
 }
 
+export async function deleteImage(id: string): Promise<void> {
+  const resp = await fetch(`${BASE_URL}/images/${encodeURIComponent(id)}`, {
+    method: 'DELETE',
+  })
+  if (!resp.ok) throw new Error(`delete failed (${resp.status})`)
+}
+
 export const apiBaseUrl = BASE_URL
