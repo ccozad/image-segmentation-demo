@@ -105,19 +105,45 @@ original image with `mask_count = 0`.
 
 ## Architecture
 
-```
-React SPA ──HTTP──> FastAPI ──> Postgres (Job rows)
-                       │              ▲
-                  raw bytes        status/result updates
-                       ▼              │
-                    MinIO/S3   <─ NATS ─> segmentation worker (SAM 3 + OpenCV, GPU)
+```mermaid
+flowchart LR
+    user([User])
+    web["React SPA<br/>web · :5173"]
+    api["FastAPI<br/>api · :8000"]
+    db[("Postgres<br/>job rows")]
+    obj[("MinIO / S3<br/>raw + annotated")]
+    nats{{"NATS JetStream"}}
+    worker["Segmentation worker<br/>SAM 3 + OpenCV · GPU"]
+
+    user --> web
+    web -->|"upload + poll · HTTP"| api
+    api -->|"persist / read jobs"| db
+    api -->|"store raw · presign URLs"| obj
+    api -->|"publish segment.request"| nats
+    nats -->|"segment.request"| worker
+    worker -->|"read raw · write annotated"| obj
+    worker -->|"segment.status / segment.result"| nats
+    nats -->|"events → update job row"| api
 ```
 
 The API persists the upload and publishes a request on NATS; the worker segments
 and reports status/results back over NATS; the API applies them to the job row.
-The worker never touches the database directly. Storage is env-switched: MinIO in
+**The worker never touches the database directly** — it communicates only over
+NATS, which keeps it swappable and replicable. Storage is env-switched: MinIO in
 dev, real AWS S3 in prod — the same API/worker images run in both; only env
 changes.
+
+Each upload becomes a `Job` that moves through a guarded state machine:
+
+```mermaid
+stateDiagram-v2
+    [*] --> pending: POST /images
+    pending --> processing: worker picks up segment.request
+    processing --> done: masks rendered or none found
+    processing --> failed: inference error
+    done --> [*]
+    failed --> [*]
+```
 
 ## Deployment
 
