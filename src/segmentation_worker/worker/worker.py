@@ -7,6 +7,7 @@ import time
 from pathlib import Path
 
 import structlog
+from nats.errors import TimeoutError as NatsTimeoutError
 
 from .config import Settings, get_settings
 from .messaging import (
@@ -100,6 +101,55 @@ async def handle_request(
     log.info("job.done", job_id=job_id, **result)
 
 
+# Shared durable consumer name. A JetStream **pull** consumer lets any number of
+# worker processes bind the same durable and have requests load-balanced across
+# them (a push consumer would let only one bind) — so this scales to a pool of
+# spot GPU nodes that each just subscribe. One worker is the degenerate case.
+WORKER_DURABLE = "seg-workers"
+
+
+async def consume(
+    js,
+    storage: Storage,
+    segmenter,
+    publisher: Publisher,
+    settings: Settings,
+    stop: asyncio.Event,
+    *,
+    durable: str = WORKER_DURABLE,
+    on_ready=None,
+) -> None:
+    """Pull `segment.request` messages and process them until `stop` is set.
+
+    Run one of these per worker process; multiple instances binding the same
+    durable share the queue (each message goes to exactly one worker, with
+    at-least-once redelivery on crash).
+    """
+    psub = await js.pull_subscribe(SUBJECT_REQUEST, durable=durable)
+    if on_ready is not None:
+        on_ready()
+    log.info("worker.ready", durable=durable)
+
+    while not stop.is_set():
+        try:
+            msgs = await psub.fetch(batch=1, timeout=1)
+        except NatsTimeoutError:
+            continue  # no work right now; poll again
+        except Exception:
+            log.exception("worker.fetch_error")
+            await asyncio.sleep(0.5)
+            continue
+        for msg in msgs:
+            try:
+                data = json.loads(msg.data)
+                await handle_request(data, storage, segmenter, publisher, settings)
+                await msg.ack()
+            except Exception:
+                # Non-inference failure (download / NATS / etc.) -> redeliver.
+                log.exception("job.error")
+                await msg.nak()
+
+
 async def main() -> None:
     settings = get_settings()
     if not settings.hf_token:
@@ -119,26 +169,14 @@ async def main() -> None:
     for sig in (signal.SIGTERM, signal.SIGINT):
         loop.add_signal_handler(sig, stop.set)
 
-    async def on_request(msg) -> None:
-        try:
-            data = json.loads(msg.data)
-            await handle_request(data, storage, segmenter, publisher, settings)
-            await msg.ack()
-        except Exception:
-            # Non-inference failure (download / NATS / etc.) -> redeliver.
-            log.exception("job.error")
-            await msg.nak()
-
-    await js.subscribe(
-        SUBJECT_REQUEST, durable="seg-worker", manual_ack=True, cb=on_request
-    )
     # Liveness marker for the container HEALTHCHECK: written once the model is
     # loaded and we're subscribed (i.e. ready to process).
     health_file = Path(os.environ.get("WORKER_HEALTH_FILE", "/tmp/worker-ready"))
-    health_file.touch()
-    log.info("worker.ready", nats=settings.nats_url)
+    await consume(
+        js, storage, segmenter, publisher, settings, stop,
+        on_ready=health_file.touch,
+    )
 
-    await stop.wait()
     log.info("worker.shutdown")
     health_file.unlink(missing_ok=True)
     await nc.drain()

@@ -34,3 +34,5 @@ packages = ["worker"]
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
+# Run fast unit tests only with: pytest -m "not integration"
+markers = ["integration: needs Docker (spins up a real NATS); slower"]
