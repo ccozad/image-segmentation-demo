@@ -75,14 +75,25 @@ class FakePublisher:
 class FakeSegmenter:
     """Stand-in for the SAM 3 Segmenter, so worker tests need no GPU."""
 
-    def __init__(self, png: bytes, mask_count: int = 2, error: str | None = None) -> None:
+    def __init__(
+        self,
+        png: bytes,
+        mask_count: int = 2,
+        error: str | None = None,
+        delay: float = 0.0,
+    ) -> None:
         self._png = png
         self._mask_count = mask_count
         self._error = error
+        self._delay = delay  # simulate work so a pool of workers interleaves
         self.calls = 0
 
     def segment(self, image_bytes: bytes, prompt: str) -> tuple[bytes, int]:
         self.calls += 1
+        if self._delay:
+            import time
+
+            time.sleep(self._delay)
         if self._error is not None:
             raise SegmentationError(self._error)
         return self._png, self._mask_count
