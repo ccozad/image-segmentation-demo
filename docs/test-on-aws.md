@@ -72,15 +72,24 @@ docker compose logs -f segmentation_worker   # wait for "sam3.loaded" then "work
 ## 4. Open the UI through an SSH tunnel
 
 From your **local machine** (any OS with an SSH client — a macOS/Linux terminal
-or Windows PowerShell), forward both the frontend and API ports:
+or Windows PowerShell), forward the frontend, API, and object-storage ports:
 
 ```sh
-ssh -i your-key.pem -L 5173:localhost:5173 -L 8000:localhost:8000 ubuntu@<INSTANCE_PUBLIC_IP>
+ssh -i your-key.pem \
+  -L 5173:localhost:5173 \
+  -L 8000:localhost:8000 \
+  -L 9000:localhost:9000 \
+  ubuntu@<INSTANCE_PUBLIC_IP>
 ```
 
-Then open **<http://localhost:5173>** in your browser. This works with no config
-because the browser calls `localhost:8000` (tunneled to the instance's API), and
-CORS already allows `localhost:5173`.
+Then open **<http://localhost:5173>** in your browser. This works with no config:
+
+- **5173** — the frontend.
+- **8000** — the API (the browser calls `localhost:8000` directly; CORS already
+  allows the `localhost:5173` origin).
+- **9000** — MinIO. The raw/annotated images are served via **presigned URLs
+  signed for `localhost:9000`**, so without this forward the images won't load
+  (the job still succeeds — you just see broken image icons).
 
 Upload an image with a prompt (e.g. `cars`) and watch it go
 `pending → processing → done`. Try a prompt with no matches (e.g. `unicorns` on a
