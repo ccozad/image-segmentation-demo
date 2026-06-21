@@ -43,14 +43,16 @@ RUN git clone https://github.com/facebookresearch/sam3.git /opt/sam3 \
     && git checkout ${SAM3_REF} \
     && pip install -e .
 
-# SAM 3's package __init__ eagerly imports its training/data code, which depends
-# on libraries SAM 3 only declares under optional extras (`train`/`dev`/
-# `notebooks`) — so `pip install -e .` above doesn't pull them, yet plain
-# `import sam3` (needed for inference) requires them. Install the runtime ones in
-# one layer. (Excludes lint/test tools and the notebook UI / decord / yt-dlp /
-# full opencv that we don't need; opencv is already installed headless above.)
+# SAM 3's package __init__ eagerly imports its training/data/video code, which
+# depends on libraries SAM 3 doesn't fully declare in core deps (some live only
+# under optional extras, and `psutil` isn't declared at all) — yet plain
+# `import sam3` (needed for inference) requires them. This is the full set of
+# hard, module-load imports on the image-model path, determined by scanning
+# every third-party import in the SAM 3 source. (Video-only deps like decord /
+# torchcodec are lazy function-level imports, never hit for image inference;
+# lint/test/notebook-UI/full-opencv are excluded — opencv is headless above.)
 RUN pip install \
-    einops pycocotools pandas numba python-rapidjson \
+    einops pycocotools psutil pandas numba python-rapidjson \
     scipy scikit-image scikit-learn \
     hydra-core omegaconf submitit tensorboard torchmetrics fvcore fairscale zstandard
 
