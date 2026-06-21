@@ -35,7 +35,11 @@ def _to_numpy(value):
     if value is None:
         return None
     if hasattr(value, "detach"):  # torch.Tensor
-        value = value.detach().cpu().numpy()
+        value = value.detach().cpu()
+        # numpy can't represent bf16/fp16 (inference runs under bf16 autocast).
+        if value.dtype.is_floating_point and value.dtype.itemsize < 4:
+            value = value.float()
+        value = value.numpy()
     return np.asarray(value)
 
 
@@ -115,6 +119,7 @@ class Segmenter:
                 "CUDA GPU not available — SAM 3 requires an NVIDIA GPU host"
             )
 
+        self._torch = torch
         log.info("sam3.loading")
         model = build_sam3_image_model().to("cuda")
         self._processor = Sam3Processor(model)
@@ -126,10 +131,20 @@ class Segmenter:
         Zero matches -> the original image unchanged with mask_count 0.
         Any inference failure -> SegmentationError (worker marks job failed).
         """
+        torch = self._torch
         pil = Image.open(io.BytesIO(image_bytes)).convert("RGB")
         try:
-            state = self._processor.set_image(pil)
-            output = self._processor.set_text_prompt(state=state, prompt=prompt)
+            # SAM 3 mixes bf16 and fp32 internally and expects inference under a
+            # bf16 autocast context (per its image-predictor example); without it
+            # matmuls fail with "mat1 and mat2 must have the same dtype". autocast
+            # is thread-local, so it must be entered here (we run in a worker
+            # thread), not at model-build time.
+            with (
+                torch.inference_mode(),
+                torch.autocast(device_type="cuda", dtype=torch.bfloat16),
+            ):
+                state = self._processor.set_image(pil)
+                output = self._processor.set_text_prompt(state=state, prompt=prompt)
             masks = output["masks"]
             boxes = output.get("boxes")
             scores = output.get("scores")
