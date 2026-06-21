@@ -43,10 +43,16 @@ RUN git clone https://github.com/facebookresearch/sam3.git /opt/sam3 \
     && git checkout ${SAM3_REF} \
     && pip install -e .
 
-# SAM 3's core model code imports einops (sam3/sam/rope.py) but only declares it
-# under an optional `notebooks` extra, so `pip install -e .` above doesn't pull
-# it. Install it explicitly. (Separate layer so the SAM 3 clone stays cached.)
-RUN pip install einops
+# SAM 3's package __init__ eagerly imports its training/data code, which depends
+# on libraries SAM 3 only declares under optional extras (`train`/`dev`/
+# `notebooks`) — so `pip install -e .` above doesn't pull them, yet plain
+# `import sam3` (needed for inference) requires them. Install the runtime ones in
+# one layer. (Excludes lint/test tools and the notebook UI / decord / yt-dlp /
+# full opencv that we don't need; opencv is already installed headless above.)
+RUN pip install \
+    einops pycocotools pandas numba python-rapidjson \
+    scipy scikit-image scikit-learn \
+    hydra-core omegaconf submitit tensorboard torchmetrics fvcore fairscale zstandard
 
 # 4) The worker package + its (CPU-light) dependencies.
 COPY pyproject.toml ./
